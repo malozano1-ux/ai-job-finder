@@ -8,6 +8,8 @@ __pycache__/
 cv.pdf
 cv.txt
 applied_jobs.json
+existing_internships.json
+internships.json
 google-service-account.json
 *.pdf
 job_history.json
