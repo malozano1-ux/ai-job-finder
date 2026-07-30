@@ -96,8 +96,15 @@ def normalize_identity(value: str) -> str:
 
 
 def load_applied_jobs() -> list[dict[str, str]]:
-    """Read the private tracker snapshot supplied by GitHub Actions."""
-    raw = os.getenv("APPLIED_JOBS", "").strip()
+    """Read a live tracker file, with the private secret as a local fallback."""
+    source = os.getenv("APPLIED_JOBS_FILE", "").strip()
+    if source:
+        path = Path(source)
+        if not path.exists():
+            raise FileNotFoundError(f"Applied-jobs file not found: {path}")
+        raw = path.read_text(encoding="utf-8").strip()
+    else:
+        raw = os.getenv("APPLIED_JOBS", "").strip()
     if not raw:
         return []
     try:

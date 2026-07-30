@@ -4,6 +4,7 @@ import unittest
 from pathlib import Path
 
 import job_finder_agent as agent
+from sync_applied_jobs import rows_to_jobs
 
 
 class AgentTests(unittest.TestCase):
@@ -39,6 +40,21 @@ class AgentTests(unittest.TestCase):
         self.assertEqual(
             agent.normalize_identity("Data Scientist, New Grad"),
             agent.normalize_identity("Data Scientist - New Grad"),
+        )
+
+    def test_tracker_rows_are_deduplicated(self):
+        rows = [
+            ["SentiLink", "Data Scientist, New Grad", "https://example.com/job"],
+            ["SentiLink", "Data Scientist, New Grad", "https://example.com/job"],
+            ["Missing title"],
+        ]
+        self.assertEqual(
+            rows_to_jobs(rows),
+            [{
+                "company": "SentiLink",
+                "title": "Data Scientist, New Grad",
+                "url": "https://example.com/job",
+            }],
         )
 
 

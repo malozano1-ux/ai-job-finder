@@ -24,7 +24,8 @@ jobs:
       GMAIL_APP_PASSWORD: ${{ secrets.GMAIL_APP_PASSWORD }}
       EMAIL_TO: ${{ secrets.EMAIL_TO }}
       CV_TEXT: ${{ secrets.CV_TEXT }}
-      APPLIED_JOBS: ${{ secrets.APPLIED_JOBS }}
+      GOOGLE_SERVICE_ACCOUNT_JSON: ${{ secrets.GOOGLE_SERVICE_ACCOUNT_JSON }}
+      JOB_TRACKER_SPREADSHEET_ID: ${{ vars.JOB_TRACKER_SPREADSHEET_ID }}
       OPENAI_MODEL: ${{ vars.OPENAI_MODEL }}
       JOB_LOCATION: ${{ vars.JOB_LOCATION }}
       JOB_TITLES: ${{ vars.JOB_TITLES }}
@@ -73,12 +74,16 @@ jobs:
         shell: bash
         run: |
           missing=0
-          for name in OPENAI_API_KEY GMAIL_ADDRESS GMAIL_APP_PASSWORD EMAIL_TO CV_TEXT APPLIED_JOBS; do
+          for name in OPENAI_API_KEY GMAIL_ADDRESS GMAIL_APP_PASSWORD EMAIL_TO CV_TEXT GOOGLE_SERVICE_ACCOUNT_JSON; do
             if [[ -z "${!name}" ]]; then
               echo "::error::Missing required GitHub Actions secret: $name"
               missing=1
             fi
           done
+          if [[ -z "$JOB_TRACKER_SPREADSHEET_ID" ]]; then
+            echo "::error::Missing required GitHub Actions variable: JOB_TRACKER_SPREADSHEET_ID"
+            missing=1
+          fi
           exit "$missing"
 
       - name: Create private CV text file
@@ -86,9 +91,25 @@ jobs:
         shell: bash
         run: printf '%s\n' "$CV_TEXT" > cv.txt
 
+      - name: Read current applications from Google Sheets
+        if: steps.schedule.outputs.run == 'true'
+        shell: bash
+        run: |
+          printf '%s' "$GOOGLE_SERVICE_ACCOUNT_JSON" > google-service-account.json
+          python sync_applied_jobs.py \
+            --credentials google-service-account.json \
+            --spreadsheet-id "$JOB_TRACKER_SPREADSHEET_ID" \
+            --output applied_jobs.json
+
       - name: Find jobs and send digest
         if: steps.schedule.outputs.run == 'true'
+        env:
+          APPLIED_JOBS_FILE: applied_jobs.json
         run: python job_finder_agent.py --cv cv.txt
+
+      - name: Remove temporary private files
+        if: always() && steps.schedule.outputs.run == 'true'
+        run: rm -f cv.txt applied_jobs.json google-service-account.json
 
       - name: Save recommendation history
         if: steps.schedule.outputs.run == 'true' && success()
