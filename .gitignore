@@ -1,0 +1,12 @@
+.env
+.venv/
+venv/
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.DS_Store
+cv.pdf
+*.pdf
+job_history.json
+outreach_queue.json
+

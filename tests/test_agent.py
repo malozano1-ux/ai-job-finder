@@ -1,0 +1,35 @@
+import json
+import tempfile
+import unittest
+from pathlib import Path
+
+import job_finder_agent as agent
+
+
+class AgentTests(unittest.TestCase):
+    def test_canonical_url_removes_tracking(self):
+        actual = agent.canonical_url(
+            "https://example.com/job/1/?utm_source=x&ref=y&team=data"
+        )
+        self.assertEqual(actual, "https://example.com/job/1?team=data")
+
+    def test_amazon_url_uses_english_locale(self):
+        actual = agent.canonical_url("https://www.amazon.jobs/cs/jobs/123/example")
+        self.assertEqual(actual, "https://www.amazon.jobs/en/jobs/123/example")
+
+    def test_extract_json_accepts_fenced_json(self):
+        self.assertEqual(agent.extract_json('```json\n{"jobs": []}\n```'), {"jobs": []})
+
+    def test_history_missing_is_empty(self):
+        with tempfile.TemporaryDirectory() as directory:
+            original = agent.HISTORY_FILE
+            agent.HISTORY_FILE = Path(directory) / "missing.json"
+            try:
+                self.assertEqual(agent.load_recent_urls(), set())
+            finally:
+                agent.HISTORY_FILE = original
+
+
+if __name__ == "__main__":
+    unittest.main()
+
