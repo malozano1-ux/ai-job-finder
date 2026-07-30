@@ -7,6 +7,7 @@ import job_finder_agent as agent
 from sync_applied_jobs import rows_to_jobs
 from sync_internship_tracker import tracker_rows
 from sync_uw_part_time_tracker import tracker_rows as uw_tracker_rows
+from sync_calendar_deadlines import resolve_deadline
 
 
 class AgentTests(unittest.TestCase):
@@ -88,6 +89,22 @@ class AgentTests(unittest.TestCase):
             "",
             "Discovered",
         ])
+
+    def test_published_calendar_deadline_is_preserved(self):
+        deadline, kind = resolve_deadline(
+            "2027-03-15",
+            today=__import__("datetime").date(2027, 3, 1),
+        )
+        self.assertEqual(deadline.isoformat(), "2027-03-15")
+        self.assertEqual(kind, "Published application deadline")
+
+    def test_missing_calendar_deadline_defaults_to_three_days(self):
+        deadline, kind = resolve_deadline(
+            "not stated",
+            today=__import__("datetime").date(2027, 3, 1),
+        )
+        self.assertEqual(deadline.isoformat(), "2027-03-04")
+        self.assertIn("Personal apply-by", kind)
 
 
 if __name__ == "__main__":

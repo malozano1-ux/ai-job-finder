@@ -12,6 +12,7 @@ existing_internships.json
 internships.json
 existing_uw_part_time.json
 uw_part_time_jobs.json
+jobs.json
 google-service-account.json
 *.pdf
 job_history.json

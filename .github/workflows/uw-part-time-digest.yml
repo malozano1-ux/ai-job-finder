@@ -24,6 +24,7 @@ jobs:
       CV_TEXT: ${{ secrets.CV_TEXT }}
       GOOGLE_SERVICE_ACCOUNT_JSON: ${{ secrets.GOOGLE_SERVICE_ACCOUNT_JSON }}
       JOB_TRACKER_SPREADSHEET_ID: ${{ vars.JOB_TRACKER_SPREADSHEET_ID }}
+      APPLICATION_CALENDAR_ID: ${{ vars.APPLICATION_CALENDAR_ID }}
       UW_STUDENT_PROFILE: ${{ vars.UW_STUDENT_PROFILE }}
       OPENAI_MODEL: ${{ vars.OPENAI_MODEL }}
 
@@ -68,7 +69,7 @@ jobs:
               missing=1
             fi
           done
-          for name in JOB_TRACKER_SPREADSHEET_ID UW_STUDENT_PROFILE; do
+          for name in JOB_TRACKER_SPREADSHEET_ID APPLICATION_CALENDAR_ID UW_STUDENT_PROFILE; do
             if [[ -z "${!name}" ]]; then
               echo "::error::Missing required GitHub Actions variable: $name"
               missing=1
@@ -112,6 +113,15 @@ jobs:
       - name: Email UW student job digest
         if: steps.schedule.outputs.run == 'true'
         run: python uw_part_time_agent.py --email-result uw_part_time_jobs.json
+
+      - name: Add application deadlines to Google Calendar
+        if: steps.schedule.outputs.run == 'true'
+        run: |
+          python sync_calendar_deadlines.py \
+            --credentials google-service-account.json \
+            --calendar-id "$APPLICATION_CALENDAR_ID" \
+            --input uw_part_time_jobs.json \
+            --source "UW part-time job"
 
       - name: Remove temporary private files
         if: always() && steps.schedule.outputs.run == 'true'
