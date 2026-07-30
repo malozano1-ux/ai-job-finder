@@ -33,7 +33,12 @@ def require_env(name: str) -> str:
 def read_cv(path: Path) -> str:
     if not path.exists():
         raise FileNotFoundError(f"CV not found: {path}")
-    text = "\n".join(page.extract_text() or "" for page in PdfReader(path).pages).strip()
+    if path.suffix.lower() == ".txt":
+        text = path.read_text(encoding="utf-8").strip()
+    else:
+        text = "\n".join(
+            page.extract_text() or "" for page in PdfReader(path).pages
+        ).strip()
     if not text:
         raise RuntimeError("The CV contains no extractable text.")
     return text[:30_000]
@@ -89,12 +94,12 @@ def openai_client() -> OpenAI:
 
 
 def find_jobs(cv_text: str, recent_urls: set[str]) -> dict[str, Any]:
-    model = os.getenv("OPENAI_MODEL", "gpt-5.6-luna")
-    location = os.getenv("JOB_LOCATION", "United States and U.S. remote")
+    model = os.getenv("OPENAI_MODEL") or "gpt-5.6-luna"
+    location = os.getenv("JOB_LOCATION") or "United States and U.S. remote"
     titles = os.getenv(
         "JOB_TITLES",
         "Data Scientist, Data Analyst, Analytics Engineer, Machine Learning Engineer",
-    )
+    ) or "Data Scientist, Data Analyst, Analytics Engineer, Machine Learning Engineer"
     prompt = f"""
 Act as a rigorous job-search agent. Search the live web and return only JSON.
 
@@ -153,7 +158,7 @@ salary, company names, or URLs. Rank at most 10 distinct jobs scoring at least
 
 
 def build_digest(result: dict[str, Any]) -> tuple[str, str, str]:
-    date = datetime.now().strftime("%Y-%m-%d")
+    date = datetime.now().astimezone().strftime("%Y-%m-%d %I:%M %p")
     jobs = result.get("jobs", [])
     summary = result.get("summary", {})
     subject = f"AI job matches - {date}"
@@ -233,7 +238,7 @@ def save_history(jobs: list[dict[str, Any]]) -> None:
 def prepare_outreach(cv_text: str, jobs: list[dict[str, Any]]) -> list[dict[str, Any]]:
     if not jobs:
         return []
-    model = os.getenv("OPENAI_MODEL", "gpt-5.6-luna")
+    model = os.getenv("OPENAI_MODEL") or "gpt-5.6-luna"
     name = os.getenv("CANDIDATE_NAME", "Candidate")
     linkedin = os.getenv("CANDIDATE_LINKEDIN", "")
     prompt = f"""
@@ -339,4 +344,3 @@ def main() -> None:
 
 if __name__ == "__main__":
     main()
-

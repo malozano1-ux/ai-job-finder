@@ -73,12 +73,33 @@ Set `"approved": true` only for drafts you want to send.
 python job_finder_agent.py --cv cv.pdf --send-approved-outreach
 ```
 
-## Schedule it
+## Schedule it with GitHub Actions
 
-On macOS or Linux, use `cron`, `launchd`, or another trusted scheduler. Keep `.env`
-and `cv.pdf` on the machine running the agent. Avoid placing personal data in
-GitHub Actions; public-repository workflows are not an appropriate place for a
-private CV.
+The included workflow runs at 8:00 AM, 1:00 PM, and 6:00 PM in
+`America/Los_Angeles`, including daylight-saving-time changes. It can also be run
+manually from the repository's **Actions** tab.
+
+In **Settings → Secrets and variables → Actions**, create these repository secrets:
+
+- `OPENAI_API_KEY`
+- `GMAIL_ADDRESS`
+- `GMAIL_APP_PASSWORD`
+- `EMAIL_TO`
+- `CV_TEXT` — the plain text extracted from your CV, without API keys or passwords
+
+Optional repository variables:
+
+- `OPENAI_MODEL`
+- `JOB_LOCATION`
+- `JOB_TITLES`
+
+The workflow recreates `cv.txt` temporarily on the private GitHub runner. It does
+not commit the CV to the public repository. GitHub Actions secrets are limited in
+size, so plain CV text is used instead of a base64-encoded PDF.
+
+The URL history is restored between runs using GitHub's Actions cache to reduce
+repeat recommendations. Scheduled workflows run from the default branch and may
+occasionally start a few minutes late during periods of high GitHub Actions load.
 
 ## Limitations
 

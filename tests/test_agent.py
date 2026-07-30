@@ -7,6 +7,12 @@ import job_finder_agent as agent
 
 
 class AgentTests(unittest.TestCase):
+    def test_read_cv_accepts_private_text_profile(self):
+        with tempfile.TemporaryDirectory() as directory:
+            path = Path(directory) / "cv.txt"
+            path.write_text("Python, SQL, and data science", encoding="utf-8")
+            self.assertEqual(agent.read_cv(path), "Python, SQL, and data science")
+
     def test_canonical_url_removes_tracking(self):
         actual = agent.canonical_url(
             "https://example.com/job/1/?utm_source=x&ref=y&team=data"
@@ -32,4 +38,3 @@ class AgentTests(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
-
