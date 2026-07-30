@@ -108,6 +108,21 @@ Actions cache to reduce repeat recommendations. Scheduled workflows run from the
 default branch and may
 occasionally start a few minutes late during periods of high GitHub Actions load.
 
+## Summer 2027 master's internship agent
+
+The separate `Summer 2027 internship digest` workflow searches for verified U.S.
+Data Science, Analytics, Applied Science, and ML internships or co-ops that accept
+master's students returning to school after Summer 2027. It emails a separate
+digest and appends new opportunities to the `Internship Tracker` tab with Stage
+`Discovered`; Date Applied remains blank until the candidate applies.
+
+This workflow requires the Google service account to have **Editor** access to the
+spreadsheet. It reads and writes only the configured spreadsheet and uses these
+repository variables:
+
+- `INTERNSHIP_SEARCH_PROFILE`
+- `INTERNSHIP_LOCATIONS`
+
 ## Limitations
 
 - Web search results can be stale, localized, or incorrect.
