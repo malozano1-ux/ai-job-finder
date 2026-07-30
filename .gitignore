@@ -6,7 +6,7 @@ __pycache__/
 .pytest_cache/
 .DS_Store
 cv.pdf
+cv.txt
 *.pdf
 job_history.json
 outreach_queue.json
-

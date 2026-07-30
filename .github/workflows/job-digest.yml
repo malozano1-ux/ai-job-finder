@@ -1,0 +1,97 @@
+name: AI job match digest
+
+on:
+  schedule:
+    # GitHub cron uses UTC. Running hourly and checking Pacific local time keeps
+    # 8 AM, 1 PM, and 6 PM stable across daylight-saving-time changes.
+    - cron: "7 * * * *"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ai-job-match-digest
+  cancel-in-progress: false
+
+jobs:
+  send-digest:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    env:
+      OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+      GMAIL_ADDRESS: ${{ secrets.GMAIL_ADDRESS }}
+      GMAIL_APP_PASSWORD: ${{ secrets.GMAIL_APP_PASSWORD }}
+      EMAIL_TO: ${{ secrets.EMAIL_TO }}
+      CV_TEXT: ${{ secrets.CV_TEXT }}
+      OPENAI_MODEL: ${{ vars.OPENAI_MODEL }}
+      JOB_LOCATION: ${{ vars.JOB_LOCATION }}
+      JOB_TITLES: ${{ vars.JOB_TITLES }}
+
+    steps:
+      - name: Check scheduled local hour
+        id: schedule
+        shell: bash
+        run: |
+          if [[ "${{ github.event_name }}" == "workflow_dispatch" ]]; then
+            echo "run=true" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          local_hour="$(TZ=America/Los_Angeles date +%H)"
+          case "$local_hour" in
+            08|13|18) echo "run=true" >> "$GITHUB_OUTPUT" ;;
+            *) echo "run=false" >> "$GITHUB_OUTPUT" ;;
+          esac
+
+      - name: Check out repository
+        if: steps.schedule.outputs.run == 'true'
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        if: steps.schedule.outputs.run == 'true'
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+
+      - name: Restore recommendation history
+        if: steps.schedule.outputs.run == 'true'
+        uses: actions/cache/restore@v4
+        with:
+          path: job_history.json
+          key: job-history-${{ github.run_id }}
+          restore-keys: |
+            job-history-
+
+      - name: Install dependencies
+        if: steps.schedule.outputs.run == 'true'
+        run: python -m pip install -r requirements.txt
+
+      - name: Validate required secrets
+        if: steps.schedule.outputs.run == 'true'
+        shell: bash
+        run: |
+          missing=0
+          for name in OPENAI_API_KEY GMAIL_ADDRESS GMAIL_APP_PASSWORD EMAIL_TO CV_TEXT; do
+            if [[ -z "${!name}" ]]; then
+              echo "::error::Missing required GitHub Actions secret: $name"
+              missing=1
+            fi
+          done
+          exit "$missing"
+
+      - name: Create private CV text file
+        if: steps.schedule.outputs.run == 'true'
+        shell: bash
+        run: printf '%s\n' "$CV_TEXT" > cv.txt
+
+      - name: Find jobs and send digest
+        if: steps.schedule.outputs.run == 'true'
+        run: python job_finder_agent.py --cv cv.txt
+
+      - name: Save recommendation history
+        if: steps.schedule.outputs.run == 'true' && success()
+        uses: actions/cache/save@v4
+        with:
+          path: job_history.json
+          key: job-history-${{ github.run_id }}
