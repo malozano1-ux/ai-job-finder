@@ -24,6 +24,7 @@ jobs:
       GMAIL_APP_PASSWORD: ${{ secrets.GMAIL_APP_PASSWORD }}
       EMAIL_TO: ${{ secrets.EMAIL_TO }}
       CV_TEXT: ${{ secrets.CV_TEXT }}
+      APPLIED_JOBS: ${{ secrets.APPLIED_JOBS }}
       OPENAI_MODEL: ${{ vars.OPENAI_MODEL }}
       JOB_LOCATION: ${{ vars.JOB_LOCATION }}
       JOB_TITLES: ${{ vars.JOB_TITLES }}
@@ -72,7 +73,7 @@ jobs:
         shell: bash
         run: |
           missing=0
-          for name in OPENAI_API_KEY GMAIL_ADDRESS GMAIL_APP_PASSWORD EMAIL_TO CV_TEXT; do
+          for name in OPENAI_API_KEY GMAIL_ADDRESS GMAIL_APP_PASSWORD EMAIL_TO CV_TEXT APPLIED_JOBS; do
             if [[ -z "${!name}" ]]; then
               echo "::error::Missing required GitHub Actions secret: $name"
               missing=1

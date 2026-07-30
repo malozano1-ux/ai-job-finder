@@ -7,6 +7,7 @@ import argparse
 import html
 import json
 import os
+import re
 import smtplib
 from datetime import datetime, timedelta, timezone
 from email.message import EmailMessage
@@ -89,11 +90,53 @@ def load_recent_urls() -> set[str]:
     return urls
 
 
+def normalize_identity(value: str) -> str:
+    """Normalize company/title text for conservative applied-job matching."""
+    return re.sub(r"[^a-z0-9]+", " ", value.casefold()).strip()
+
+
+def load_applied_jobs() -> list[dict[str, str]]:
+    """Read the private tracker snapshot supplied by GitHub Actions."""
+    raw = os.getenv("APPLIED_JOBS", "").strip()
+    if not raw:
+        return []
+    try:
+        rows = json.loads(raw)
+    except json.JSONDecodeError as error:
+        raise RuntimeError("APPLIED_JOBS is not valid JSON.") from error
+    if not isinstance(rows, list):
+        raise RuntimeError("APPLIED_JOBS must be a JSON list.")
+    safe: list[dict[str, str]] = []
+    for row in rows:
+        if not isinstance(row, dict):
+            continue
+        company = str(row.get("company", "")).strip()
+        title = str(row.get("title", "")).strip()
+        url = str(row.get("url", "")).strip()
+        if company and title:
+            safe.append({"company": company, "title": title, "url": url})
+    return safe
+
+
 def openai_client() -> OpenAI:
     return OpenAI(api_key=require_env("OPENAI_API_KEY"))
 
 
-def find_jobs(cv_text: str, recent_urls: set[str]) -> dict[str, Any]:
+def find_jobs(
+    cv_text: str,
+    recent_urls: set[str],
+    applied_jobs: list[dict[str, str]] | None = None,
+) -> dict[str, Any]:
+    applied_jobs = applied_jobs or []
+    applied_urls = {
+        canonical_url(row["url"])
+        for row in applied_jobs
+        if row.get("url", "").startswith("http")
+    }
+    applied_identities = {
+        (normalize_identity(row["company"]), normalize_identity(row["title"]))
+        for row in applied_jobs
+    }
     model = os.getenv("OPENAI_MODEL") or "gpt-5.6-luna"
     location = os.getenv("JOB_LOCATION") or "United States and U.S. remote"
     titles = os.getenv(
@@ -115,6 +158,9 @@ Settings:
 - Exclude hard requirements above 3 years
 - Prefer direct employer application pages
 - Exclude these recently emailed URLs: {json.dumps(sorted(recent_urls))}
+- Never recommend any job in this already-applied list, even if its listing URL
+  has different tracking parameters:
+{json.dumps(applied_jobs, ensure_ascii=False)}
 
 Open each selected listing during this run. Never invent requirements, dates,
 salary, company names, or URLs. Rank at most 10 distinct jobs scoring at least
@@ -142,12 +188,21 @@ salary, company names, or URLs. Rank at most 10 distinct jobs scoring at least
     jobs = result.get("jobs", [])
     if not isinstance(jobs, list):
         raise RuntimeError("Invalid jobs payload.")
-    seen = set(recent_urls)
+    seen = set(recent_urls) | applied_urls
     selected = []
     for job in jobs:
         url = canonical_url(str(job.get("url", "")))
         score = int(job.get("fit_score", 0))
-        if url.startswith("https://") and url not in seen and score >= 70:
+        identity = (
+            normalize_identity(str(job.get("company", ""))),
+            normalize_identity(str(job.get("title", ""))),
+        )
+        if (
+            url.startswith("https://")
+            and url not in seen
+            and identity not in applied_identities
+            and score >= 70
+        ):
             job["url"] = url
             selected.append(job)
             seen.add(url)
@@ -324,7 +379,7 @@ def main() -> None:
         return
 
     cv_text = read_cv(args.cv)
-    result = find_jobs(cv_text, load_recent_urls())
+    result = find_jobs(cv_text, load_recent_urls(), load_applied_jobs())
     subject, text, rich = build_digest(result)
     if args.dry_run:
         print(text)

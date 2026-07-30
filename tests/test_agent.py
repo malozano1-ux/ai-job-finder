@@ -35,6 +35,12 @@ class AgentTests(unittest.TestCase):
             finally:
                 agent.HISTORY_FILE = original
 
+    def test_applied_job_is_excluded_by_normalized_identity(self):
+        self.assertEqual(
+            agent.normalize_identity("Data Scientist, New Grad"),
+            agent.normalize_identity("Data Scientist - New Grad"),
+        )
+
 
 if __name__ == "__main__":
     unittest.main()
