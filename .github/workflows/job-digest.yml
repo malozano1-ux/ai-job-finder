@@ -26,6 +26,7 @@ jobs:
       CV_TEXT: ${{ secrets.CV_TEXT }}
       GOOGLE_SERVICE_ACCOUNT_JSON: ${{ secrets.GOOGLE_SERVICE_ACCOUNT_JSON }}
       JOB_TRACKER_SPREADSHEET_ID: ${{ vars.JOB_TRACKER_SPREADSHEET_ID }}
+      APPLICATION_CALENDAR_ID: ${{ vars.APPLICATION_CALENDAR_ID }}
       OPENAI_MODEL: ${{ vars.OPENAI_MODEL }}
       JOB_LOCATION: ${{ vars.JOB_LOCATION }}
       JOB_TITLES: ${{ vars.JOB_TITLES }}
@@ -84,6 +85,10 @@ jobs:
             echo "::error::Missing required GitHub Actions variable: JOB_TRACKER_SPREADSHEET_ID"
             missing=1
           fi
+          if [[ -z "$APPLICATION_CALENDAR_ID" ]]; then
+            echo "::error::Missing required GitHub Actions variable: APPLICATION_CALENDAR_ID"
+            missing=1
+          fi
           exit "$missing"
 
       - name: Create private CV text file
@@ -105,11 +110,20 @@ jobs:
         if: steps.schedule.outputs.run == 'true'
         env:
           APPLIED_JOBS_FILE: applied_jobs.json
-        run: python job_finder_agent.py --cv cv.txt
+        run: python job_finder_agent.py --cv cv.txt --output-json jobs.json
+
+      - name: Add application deadlines to Google Calendar
+        if: steps.schedule.outputs.run == 'true'
+        run: |
+          python sync_calendar_deadlines.py \
+            --credentials google-service-account.json \
+            --calendar-id "$APPLICATION_CALENDAR_ID" \
+            --input jobs.json \
+            --source "Full-time job"
 
       - name: Remove temporary private files
         if: always() && steps.schedule.outputs.run == 'true'
-        run: rm -f cv.txt applied_jobs.json google-service-account.json
+        run: rm -f cv.txt applied_jobs.json jobs.json google-service-account.json
 
       - name: Save recommendation history
         if: steps.schedule.outputs.run == 'true' && success()

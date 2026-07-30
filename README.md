@@ -136,6 +136,19 @@ New opportunities are appended to `UW Part-Time` with Stage `Discovered` and a
 blank Date Applied. The workflow runs at 9:00 AM, 2:00 PM, and 7:00 PM Pacific and
 uses the `UW_STUDENT_PROFILE` repository variable.
 
+## Google Calendar application deadlines
+
+All three discovery workflows create transparent all-day events on the calendar
+identified by `APPLICATION_CALENDAR_ID`. A published application deadline is used
+when available; otherwise the agent creates a personal apply-by deadline three
+days after discovery. Events contain the role, company, opportunity type, and
+direct application URL, with popup reminders one day and two hours beforehand.
+
+Calendar events use a stable private opportunity key, so later runs update an
+existing deadline instead of creating duplicates. The Google Calendar API must be
+enabled, and the service account must have permission to make changes to events
+on the target calendar.
+
 ## Limitations
 
 - Web search results can be stale, localized, or incorrect.

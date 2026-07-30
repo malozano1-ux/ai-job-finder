@@ -174,10 +174,11 @@ salary, company names, or URLs. Rank at most 10 distinct jobs scoring at least
 70/100. Return exactly:
 {{
   "summary": {{"reviewed": 0, "coverage": "one sentence"}},
-  "jobs": [{{
+    "jobs": [{{
     "title": "string", "company": "string", "location": "string",
     "work_arrangement": "remote|hybrid|onsite|not stated",
     "posted_date": "YYYY-MM-DD or not stated", "fit_score": 0,
+    "deadline": "YYYY-MM-DD or not stated",
     "match_reasons": ["reason"], "gap": "largest honest gap",
     "hard_requirements": ["confirmed requirement"],
     "preferred_qualifications": ["confirmed preference"],
@@ -378,6 +379,7 @@ def main() -> None:
     parser.add_argument("--dry-run", action="store_true")
     parser.add_argument("--prepare-outreach", action="store_true")
     parser.add_argument("--send-approved-outreach", action="store_true")
+    parser.add_argument("--output-json", type=Path)
     args = parser.parse_args()
     load_dotenv()
 
@@ -387,6 +389,11 @@ def main() -> None:
 
     cv_text = read_cv(args.cv)
     result = find_jobs(cv_text, load_recent_urls(), load_applied_jobs())
+    if args.output_json:
+        args.output_json.write_text(
+            json.dumps(result, ensure_ascii=False, indent=2),
+            encoding="utf-8",
+        )
     subject, text, rich = build_digest(result)
     if args.dry_run:
         print(text)
