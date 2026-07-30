@@ -123,6 +123,19 @@ repository variables:
 - `INTERNSHIP_SEARCH_PROFILE`
 - `INTERNSHIP_LOCATIONS`
 
+## UW part-time student-job agent
+
+The separate `UW part-time student jobs` workflow searches official University of
+Washington sources for current roles that an enrolled graduate or general student
+can perform alongside a master's program. It prioritizes research, data, analytics,
+computing, tutoring, library, administrative, operations, and realistic general
+campus jobs, while clearly flagging work-study requirements, weekly hours, pay,
+eligibility, and deadlines when stated.
+
+New opportunities are appended to `UW Part-Time` with Stage `Discovered` and a
+blank Date Applied. The workflow runs at 9:00 AM, 2:00 PM, and 7:00 PM Pacific and
+uses the `UW_STUDENT_PROFILE` repository variable.
+
 ## Limitations
 
 - Web search results can be stale, localized, or incorrect.

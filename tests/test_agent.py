@@ -6,6 +6,7 @@ from pathlib import Path
 import job_finder_agent as agent
 from sync_applied_jobs import rows_to_jobs
 from sync_internship_tracker import tracker_rows
+from sync_uw_part_time_tracker import tracker_rows as uw_tracker_rows
 
 
 class AgentTests(unittest.TestCase):
@@ -69,6 +70,21 @@ class AgentTests(unittest.TestCase):
             "Example",
             "Data Scientist Intern",
             "https://example.com/internship",
+            "",
+            "Discovered",
+        ])
+
+    def test_uw_tracker_rows_use_discovered_stage(self):
+        rows = uw_tracker_rows({"jobs": [{
+            "company": "UW Libraries",
+            "title": "Student Assistant",
+            "url": "https://example.com/uw-job",
+            "fit_score": 80,
+        }]})
+        self.assertEqual(rows[0][0:5], [
+            "UW Libraries",
+            "Student Assistant",
+            "https://example.com/uw-job",
             "",
             "Discovered",
         ])
