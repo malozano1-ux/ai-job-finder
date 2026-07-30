@@ -86,23 +86,26 @@ In **Settings → Secrets and variables → Actions**, create these repository s
 - `GMAIL_APP_PASSWORD`
 - `EMAIL_TO`
 - `CV_TEXT` — the plain text extracted from your CV, without API keys or passwords
-- `APPLIED_JOBS` — a private JSON snapshot of company, title, and URL from your
-  application tracker
+- `GOOGLE_SERVICE_ACCOUNT_JSON` — the complete JSON key for a Google Cloud
+  service account that has Viewer access to the tracker
 
 Optional repository variables:
 
 - `OPENAI_MODEL`
 - `JOB_LOCATION`
 - `JOB_TITLES`
+- `JOB_TRACKER_SPREADSHEET_ID` — required for live tracker synchronization
 
 The workflow recreates `cv.txt` temporarily on the private GitHub runner. It does
 not commit the CV to the public repository. GitHub Actions secrets are limited in
 size, so plain CV text is used instead of a base64-encoded PDF.
 
-The URL history is restored between runs using GitHub's Actions cache to reduce
-repeat recommendations. The agent also rejects already-applied roles by canonical
-URL and normalized company/title, so tracking parameters cannot make an old role
-look new. Scheduled workflows run from the default branch and may
+Before every digest, the workflow reads columns A:C of `Job Tracker` directly
+from Google Sheets with read-only access. The agent rejects already-applied roles
+by canonical URL and normalized company/title, so tracking parameters cannot make
+an old role look new. The URL history is also restored between runs using GitHub's
+Actions cache to reduce repeat recommendations. Scheduled workflows run from the
+default branch and may
 occasionally start a few minutes late during periods of high GitHub Actions load.
 
 ## Limitations

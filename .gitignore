@@ -7,6 +7,8 @@ __pycache__/
 .DS_Store
 cv.pdf
 cv.txt
+applied_jobs.json
+google-service-account.json
 *.pdf
 job_history.json
 outreach_queue.json
