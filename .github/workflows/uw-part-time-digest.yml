@@ -1,0 +1,120 @@
+name: UW part-time student jobs
+
+on:
+  schedule:
+    - cron: "47 * * * *"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: uw-part-time-student-jobs
+  cancel-in-progress: false
+
+jobs:
+  send-uw-part-time-digest:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    env:
+      OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+      GMAIL_ADDRESS: ${{ secrets.GMAIL_ADDRESS }}
+      GMAIL_APP_PASSWORD: ${{ secrets.GMAIL_APP_PASSWORD }}
+      EMAIL_TO: ${{ secrets.EMAIL_TO }}
+      CV_TEXT: ${{ secrets.CV_TEXT }}
+      GOOGLE_SERVICE_ACCOUNT_JSON: ${{ secrets.GOOGLE_SERVICE_ACCOUNT_JSON }}
+      JOB_TRACKER_SPREADSHEET_ID: ${{ vars.JOB_TRACKER_SPREADSHEET_ID }}
+      UW_STUDENT_PROFILE: ${{ vars.UW_STUDENT_PROFILE }}
+      OPENAI_MODEL: ${{ vars.OPENAI_MODEL }}
+
+    steps:
+      - name: Check scheduled local hour
+        id: schedule
+        shell: bash
+        run: |
+          if [[ "${{ github.event_name }}" == "workflow_dispatch" ]]; then
+            echo "run=true" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          local_hour="$(TZ=America/Los_Angeles date +%H)"
+          case "$local_hour" in
+            09|14|19) echo "run=true" >> "$GITHUB_OUTPUT" ;;
+            *) echo "run=false" >> "$GITHUB_OUTPUT" ;;
+          esac
+
+      - name: Check out repository
+        if: steps.schedule.outputs.run == 'true'
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        if: steps.schedule.outputs.run == 'true'
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+
+      - name: Install dependencies
+        if: steps.schedule.outputs.run == 'true'
+        run: python -m pip install -r requirements.txt
+
+      - name: Validate configuration
+        if: steps.schedule.outputs.run == 'true'
+        shell: bash
+        run: |
+          missing=0
+          for name in OPENAI_API_KEY GMAIL_ADDRESS GMAIL_APP_PASSWORD EMAIL_TO CV_TEXT GOOGLE_SERVICE_ACCOUNT_JSON; do
+            if [[ -z "${!name}" ]]; then
+              echo "::error::Missing required GitHub Actions secret: $name"
+              missing=1
+            fi
+          done
+          for name in JOB_TRACKER_SPREADSHEET_ID UW_STUDENT_PROFILE; do
+            if [[ -z "${!name}" ]]; then
+              echo "::error::Missing required GitHub Actions variable: $name"
+              missing=1
+            fi
+          done
+          exit "$missing"
+
+      - name: Create temporary private files
+        if: steps.schedule.outputs.run == 'true'
+        shell: bash
+        run: |
+          printf '%s\n' "$CV_TEXT" > cv.txt
+          printf '%s' "$GOOGLE_SERVICE_ACCOUNT_JSON" > google-service-account.json
+
+      - name: Read UW Part-Time tracker
+        if: steps.schedule.outputs.run == 'true'
+        run: |
+          python sync_applied_jobs.py \
+            --credentials google-service-account.json \
+            --spreadsheet-id "$JOB_TRACKER_SPREADSHEET_ID" \
+            --tab "UW Part-Time" \
+            --output existing_uw_part_time.json
+
+      - name: Find UW student jobs
+        if: steps.schedule.outputs.run == 'true'
+        run: |
+          python uw_part_time_agent.py \
+            --cv cv.txt \
+            --existing existing_uw_part_time.json \
+            --output uw_part_time_jobs.json \
+            --dry-run
+
+      - name: Add discoveries to UW Part-Time
+        if: steps.schedule.outputs.run == 'true'
+        run: |
+          python sync_uw_part_time_tracker.py \
+            --credentials google-service-account.json \
+            --spreadsheet-id "$JOB_TRACKER_SPREADSHEET_ID" \
+            --input uw_part_time_jobs.json
+
+      - name: Email UW student job digest
+        if: steps.schedule.outputs.run == 'true'
+        run: python uw_part_time_agent.py --email-result uw_part_time_jobs.json
+
+      - name: Remove temporary private files
+        if: always() && steps.schedule.outputs.run == 'true'
+        run: |
+          rm -f cv.txt google-service-account.json
+          rm -f existing_uw_part_time.json uw_part_time_jobs.json
