@@ -214,7 +214,7 @@ Return exactly:
 """
     client = OpenAI(api_key=os.environ["OPENAI_API_KEY"])
     response = client.responses.create(
-        model=os.getenv("OPENAI_MODEL", "gpt-5.4-mini"), input=prompt
+        model=os.getenv("OPENAI_MODEL") or "gpt-5.6-luna", input=prompt
     )
     return _extract_json(response.output_text)
 
