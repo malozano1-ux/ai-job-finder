@@ -14,6 +14,7 @@ from dotenv import load_dotenv
 
 from job_finder_agent import (
     canonical_url,
+    create_response_with_rate_limit_retry,
     extract_json,
     normalize_identity,
     openai_client,
@@ -95,11 +96,13 @@ Return up to 10 distinct opportunities scoring at least 70/100. Return exactly:
   }}]
 }}
 """
-    response = openai_client().responses.create(
+    response = create_response_with_rate_limit_retry(
+        openai_client(),
         model=model,
         input=prompt,
         tools=[{"type": "web_search"}],
         reasoning={"effort": "medium"},
+        max_output_tokens=12_000,
     )
     result = extract_json(response.output_text)
     jobs = result.get("jobs", [])

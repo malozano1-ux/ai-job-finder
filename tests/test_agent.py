@@ -2,8 +2,10 @@ import json
 import tempfile
 import unittest
 from pathlib import Path
+from unittest.mock import MagicMock, patch
 
 import job_finder_agent as agent
+from openai import RateLimitError
 from sync_applied_jobs import rows_to_jobs
 from sync_internship_tracker import tracker_rows
 from sync_uw_part_time_tracker import tracker_rows as uw_tracker_rows
@@ -12,6 +14,52 @@ from sync_gmail_tracker import HEADERS, validate_plan
 
 
 class AgentTests(unittest.TestCase):
+    def test_openai_rate_limit_is_retried(self):
+        response = MagicMock()
+        response.status_code = 429
+        response.headers = {"retry-after": "0"}
+        error = RateLimitError(
+            "rate limit exceeded",
+            response=response,
+            body={"error": {"code": "rate_limit_exceeded"}},
+        )
+        expected = MagicMock()
+        client = MagicMock()
+        client.responses.create.side_effect = [error, expected]
+
+        with patch.object(agent.time, "sleep") as sleep:
+            actual = agent.create_response_with_rate_limit_retry(
+                client,
+                model="test-model",
+                input="test prompt",
+            )
+
+        self.assertIs(actual, expected)
+        self.assertEqual(client.responses.create.call_count, 2)
+        sleep.assert_called_once_with(5.0)
+
+    def test_openai_rate_limit_stops_after_max_attempts(self):
+        response = MagicMock()
+        response.status_code = 429
+        response.headers = {}
+        error = RateLimitError(
+            "rate limit exceeded",
+            response=response,
+            body={"error": {"code": "rate_limit_exceeded"}},
+        )
+        client = MagicMock()
+        client.responses.create.side_effect = error
+
+        with patch.object(agent.time, "sleep"), self.assertRaises(RateLimitError):
+            agent.create_response_with_rate_limit_retry(
+                client,
+                max_attempts=2,
+                model="test-model",
+                input="test prompt",
+            )
+
+        self.assertEqual(client.responses.create.call_count, 2)
+
     def test_gmail_sync_routes_confirmation_to_existing_tab_row(self):
         rows = {
             "Internship Tracker": [
