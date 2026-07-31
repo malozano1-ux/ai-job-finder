@@ -9,6 +9,7 @@ import json
 import os
 import re
 import smtplib
+import time
 from datetime import datetime, timedelta, timezone
 from email.message import EmailMessage
 from pathlib import Path
@@ -16,7 +17,7 @@ from typing import Any
 from urllib.parse import parse_qsl, urlencode, urlsplit, urlunsplit
 
 from dotenv import load_dotenv
-from openai import OpenAI
+from openai import OpenAI, RateLimitError
 from pypdf import PdfReader
 
 
@@ -129,6 +130,35 @@ def openai_client() -> OpenAI:
     return OpenAI(api_key=require_env("OPENAI_API_KEY"))
 
 
+def create_response_with_rate_limit_retry(
+    client: OpenAI,
+    *,
+    max_attempts: int = 4,
+    **kwargs: Any,
+) -> Any:
+    """Retry transient OpenAI rate limits without retrying forever."""
+    for attempt in range(max_attempts):
+        try:
+            return client.responses.create(**kwargs)
+        except RateLimitError as error:
+            if attempt + 1 >= max_attempts:
+                raise
+            retry_after = 0.0
+            response = getattr(error, "response", None)
+            if response is not None:
+                try:
+                    retry_after = float(response.headers.get("retry-after", 0))
+                except (TypeError, ValueError):
+                    retry_after = 0.0
+            delay = min(60.0, max(retry_after, 5.0 * (2 ** attempt)))
+            print(
+                f"OpenAI rate limit reached; retrying in {delay:g} seconds "
+                f"(attempt {attempt + 2}/{max_attempts})."
+            )
+            time.sleep(delay)
+    raise RuntimeError("OpenAI response retry loop ended unexpectedly.")
+
+
 def find_jobs(
     cv_text: str,
     recent_urls: set[str],
@@ -186,11 +216,13 @@ salary, company names, or URLs. Rank at most 10 distinct jobs scoring at least
   }}]
 }}
 """
-    response = openai_client().responses.create(
+    response = create_response_with_rate_limit_retry(
+        openai_client(),
         model=model,
         input=prompt,
         tools=[{"type": "web_search"}],
         reasoning={"effort": "medium"},
+        max_output_tokens=12_000,
     )
     result = extract_json(response.output_text)
     jobs = result.get("jobs", [])
