@@ -1,0 +1,79 @@
+name: Sync Gmail application status to trackers
+
+on:
+  schedule:
+    - cron: "23 * * * *"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: gmail-application-tracker-sync
+  cancel-in-progress: false
+
+jobs:
+  sync:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    env:
+      OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+      OPENAI_MODEL: ${{ vars.OPENAI_MODEL }}
+      GMAIL_TOKEN_JSON: ${{ secrets.GMAIL_TOKEN_JSON }}
+      GOOGLE_SERVICE_ACCOUNT_JSON: ${{ secrets.GOOGLE_SERVICE_ACCOUNT_JSON }}
+      JOB_TRACKER_SPREADSHEET_ID: ${{ vars.JOB_TRACKER_SPREADSHEET_ID }}
+
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+      - run: python -m pip install -r requirements.txt
+
+      - name: Restore processed-email history
+        uses: actions/cache/restore@v4
+        with:
+          path: gmail_sync_state.json
+          key: gmail-sync-${{ github.run_id }}
+          restore-keys: |
+            gmail-sync-
+
+      - name: Validate configuration
+        shell: bash
+        run: |
+          missing=0
+          for name in OPENAI_API_KEY GMAIL_TOKEN_JSON GOOGLE_SERVICE_ACCOUNT_JSON JOB_TRACKER_SPREADSHEET_ID; do
+            if [[ -z "${!name}" ]]; then
+              echo "::error::Missing required configuration: $name"
+              missing=1
+            fi
+          done
+          exit "$missing"
+
+      - name: Create temporary credentials
+        shell: bash
+        run: |
+          printf '%s' "$GMAIL_TOKEN_JSON" > gmail_token.json
+          printf '%s' "$GOOGLE_SERVICE_ACCOUNT_JSON" > google-service-account.json
+
+      - name: Update all application trackers from Gmail
+        run: |
+          python sync_gmail_tracker.py \
+            --gmail-token gmail_token.json \
+            --sheets-credentials google-service-account.json \
+            --spreadsheet-id "$JOB_TRACKER_SPREADSHEET_ID" \
+            --tabs "Job Tracker" "Internship Tracker" "UW Part-Time" \
+            --days 90 \
+            --state-file gmail_sync_state.json
+
+      - name: Remove temporary credentials
+        if: always()
+        run: rm -f gmail_token.json google-service-account.json
+
+      - name: Save processed-email history
+        if: success()
+        uses: actions/cache/save@v4
+        with:
+          path: gmail_sync_state.json
+          key: gmail-sync-${{ github.run_id }}

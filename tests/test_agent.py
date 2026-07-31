@@ -8,9 +8,47 @@ from sync_applied_jobs import rows_to_jobs
 from sync_internship_tracker import tracker_rows
 from sync_uw_part_time_tracker import tracker_rows as uw_tracker_rows
 from sync_calendar_deadlines import resolve_deadline
+from sync_gmail_tracker import HEADERS, validate_plan
 
 
 class AgentTests(unittest.TestCase):
+    def test_gmail_sync_routes_confirmation_to_existing_tab_row(self):
+        rows = {
+            "Internship Tracker": [
+                HEADERS,
+                ["Walleye Capital", "Investment Data Science Intern"] + [""] * 13,
+            ],
+            "Job Tracker": [HEADERS],
+            "UW Part-Time": [HEADERS],
+        }
+        emails = [{"message_id": "gmail-1"}]
+        plan = {"adds": [], "updates": [{
+            "tab": "Internship Tracker",
+            "row_number": 2,
+            "stage": "Applied",
+            "evidence_message_id": "gmail-1",
+        }]}
+        changes = validate_plan(plan, emails, rows)
+        self.assertEqual(len(changes["updates"]), 1)
+        self.assertEqual(changes["updates"][0]["tab"], "Internship Tracker")
+
+    def test_gmail_sync_rejects_stage_downgrade(self):
+        rows = {
+            "Job Tracker": [
+                HEADERS,
+                ["Acme", "Data Scientist", "", "", "Final Interview"] + [""] * 10,
+            ],
+        }
+        emails = [{"message_id": "old-confirmation"}]
+        plan = {"adds": [], "updates": [{
+            "tab": "Job Tracker",
+            "row_number": 2,
+            "stage": "Applied",
+            "evidence_message_id": "old-confirmation",
+        }]}
+        changes = validate_plan(plan, emails, rows)
+        self.assertEqual(changes["updates"], [])
+
     def test_read_cv_accepts_private_text_profile(self):
         with tempfile.TemporaryDirectory() as directory:
             path = Path(directory) / "cv.txt"

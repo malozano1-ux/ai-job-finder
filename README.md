@@ -149,6 +149,25 @@ existing deadline instead of creating duplicates. The Google Calendar API must b
 enabled, and the service account must have permission to make changes to events
 on the target calendar.
 
+## Gmail application-status synchronization
+
+The `Sync Gmail application status to trackers` workflow runs hourly. It reads
+application confirmations and later hiring updates from Gmail, then safely
+updates `Job Tracker`, `Internship Tracker`, and `UW Part-Time`.
+
+The workflow requires a repository secret named `GMAIL_TOKEN_JSON`. Create it
+once with a Google OAuth Desktop client:
+
+```bash
+python authorize_gmail.py --client gmail_client.json --output gmail_token.json
+gh secret set GMAIL_TOKEN_JSON < gmail_token.json
+```
+
+The OAuth client and token files are private and ignored by Git. The token grants
+read-only Gmail access; spreadsheet writes continue to use the existing Google
+service account. Processed Gmail message IDs are cached so the hourly workflow
+does not repeatedly analyze the same messages.
+
 ## Limitations
 
 - Web search results can be stale, localized, or incorrect.

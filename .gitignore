@@ -13,6 +13,9 @@ internships.json
 existing_uw_part_time.json
 uw_part_time_jobs.json
 jobs.json
+gmail_client.json
+gmail_token.json
+gmail_sync_state.json
 google-service-account.json
 *.pdf
 job_history.json
