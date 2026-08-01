@@ -127,13 +127,14 @@ def load_applied_jobs() -> list[dict[str, str]]:
 
 
 def openai_client() -> OpenAI:
-    return OpenAI(api_key=require_env("OPENAI_API_KEY"))
+    # The shared helper owns retries so attempts and wait times remain bounded.
+    return OpenAI(api_key=require_env("OPENAI_API_KEY"), max_retries=0)
 
 
 def create_response_with_rate_limit_retry(
     client: OpenAI,
     *,
-    max_attempts: int = 4,
+    max_attempts: int = 6,
     **kwargs: Any,
 ) -> Any:
     """Retry transient OpenAI rate limits without retrying forever."""
@@ -150,7 +151,19 @@ def create_response_with_rate_limit_retry(
                     retry_after = float(response.headers.get("retry-after", 0))
                 except (TypeError, ValueError):
                     retry_after = 0.0
-            delay = min(60.0, max(retry_after, 5.0 * (2 ** attempt)))
+            message_wait = 0.0
+            match = re.search(
+                r"try again in\s+([0-9]+(?:\.[0-9]+)?)s",
+                str(error),
+                flags=re.IGNORECASE,
+            )
+            if match:
+                message_wait = float(match.group(1))
+            advised_wait = max(retry_after, message_wait)
+            delay = min(
+                120.0,
+                max(15.0 * (2 ** attempt), advised_wait + 5.0),
+            )
             print(
                 f"OpenAI rate limit reached; retrying in {delay:g} seconds "
                 f"(attempt {attempt + 2}/{max_attempts})."
@@ -356,11 +369,13 @@ Return: {{"outreach": [{{
 }}]}}
 Omit contacts lacking an explicitly published professional email.
 """
-    response = openai_client().responses.create(
+    response = create_response_with_rate_limit_retry(
+        openai_client(),
         model=model,
         input=prompt,
         tools=[{"type": "web_search"}],
         reasoning={"effort": "medium"},
+        max_output_tokens=12_000,
     )
     rows = extract_json(response.output_text).get("outreach", [])
     safe = []
