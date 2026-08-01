@@ -57,7 +57,29 @@ class AgentTests(unittest.TestCase):
 
         self.assertIs(actual, expected)
         self.assertEqual(client.responses.create.call_count, 2)
-        sleep.assert_called_once_with(5.0)
+        sleep.assert_called_once_with(15.0)
+
+    def test_openai_rate_limit_honors_message_wait_with_cushion(self):
+        response = MagicMock()
+        response.status_code = 429
+        response.headers = {}
+        error = RateLimitError(
+            "Please try again in 13.149s.",
+            response=response,
+            body={"error": {"code": "rate_limit_exceeded"}},
+        )
+        client = MagicMock()
+        client.responses.create.side_effect = [error, MagicMock()]
+
+        with patch.object(agent.time, "sleep") as sleep:
+            agent.create_response_with_rate_limit_retry(
+                client,
+                model="test-model",
+                input="test prompt",
+            )
+
+        sleep.assert_called_once()
+        self.assertAlmostEqual(sleep.call_args.args[0], 18.149)
 
     def test_openai_rate_limit_stops_after_max_attempts(self):
         response = MagicMock()
