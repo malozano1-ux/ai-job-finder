@@ -5,6 +5,7 @@ from pathlib import Path
 from unittest.mock import MagicMock, patch
 
 import job_finder_agent as agent
+import uw_part_time_agent as uw_agent
 from openai import RateLimitError
 from sync_applied_jobs import rows_to_jobs
 from sync_internship_tracker import tracker_rows
@@ -14,6 +15,26 @@ from sync_gmail_tracker import HEADERS, validate_plan
 
 
 class AgentTests(unittest.TestCase):
+    @patch.object(uw_agent, "create_response_with_rate_limit_retry")
+    @patch.object(uw_agent, "openai_client")
+    def test_uw_search_uses_rate_limit_retry_and_token_cap(
+        self,
+        client_factory,
+        create_response,
+    ):
+        create_response.return_value.output_text = json.dumps({
+            "summary": {"reviewed": 0, "coverage": "test"},
+            "jobs": [],
+        })
+
+        result = uw_agent.find_uw_jobs("test CV", [])
+
+        self.assertEqual(result["jobs"], [])
+        create_response.assert_called_once()
+        args, kwargs = create_response.call_args
+        self.assertIs(args[0], client_factory.return_value)
+        self.assertEqual(kwargs["max_output_tokens"], 12_000)
+
     def test_openai_rate_limit_is_retried(self):
         response = MagicMock()
         response.status_code = 429
