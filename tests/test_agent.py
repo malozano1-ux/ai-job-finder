@@ -48,7 +48,8 @@ class AgentTests(unittest.TestCase):
         create_response.assert_called_once()
         args, kwargs = create_response.call_args
         self.assertIs(args[0], client_factory.return_value)
-        self.assertEqual(kwargs["max_output_tokens"], 12_000)
+        self.assertEqual(kwargs["max_output_tokens"], 6_000)
+        self.assertEqual(kwargs["reasoning"], {"effort": "low"})
 
     def test_openai_rate_limit_is_retried(self):
         response = MagicMock()
