@@ -9,7 +9,7 @@ permissions:
   contents: read
 
 concurrency:
-  group: summer-2027-internship-digest
+  group: student-opportunity-openai-workflows
   cancel-in-progress: false
 
 jobs:
@@ -30,23 +30,26 @@ jobs:
       OPENAI_MODEL: ${{ vars.OPENAI_MODEL }}
 
     steps:
-      - name: Check scheduled local hour
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Restore completed schedule slot
+        if: github.event_name == 'schedule'
+        uses: actions/cache/restore@v4
+        with:
+          path: internship_schedule_state.json
+          key: internship-schedule-v1-${{ github.run_id }}
+          restore-keys: |
+            internship-schedule-v1-
+
+      - name: Check due schedule slot
         id: schedule
         shell: bash
         run: |
-          if [[ "${{ github.event_name }}" == "workflow_dispatch" ]]; then
-            echo "run=true" >> "$GITHUB_OUTPUT"
-            exit 0
-          fi
-          local_hour="$(TZ=America/Los_Angeles date +%H)"
-          case "$local_hour" in
-            08|13|18) echo "run=true" >> "$GITHUB_OUTPUT" ;;
-            *) echo "run=false" >> "$GITHUB_OUTPUT" ;;
-          esac
-
-      - name: Check out repository
-        if: steps.schedule.outputs.run == 'true'
-        uses: actions/checkout@v4
+          python schedule_gate.py \
+            --event "${{ github.event_name }}" \
+            --state internship_schedule_state.json \
+            --hours 8 13 18 >> "$GITHUB_OUTPUT"
 
       - name: Set up Python
         if: steps.schedule.outputs.run == 'true'
@@ -129,3 +132,14 @@ jobs:
         run: |
           rm -f cv.txt google-service-account.json
           rm -f existing_internships.json internships.json
+
+      - name: Record completed schedule slot
+        if: success() && github.event_name == 'schedule' && steps.schedule.outputs.run == 'true'
+        run: printf '{"slot":"%s"}\n' "${{ steps.schedule.outputs.slot }}" > internship_schedule_state.json
+
+      - name: Save completed schedule slot
+        if: success() && github.event_name == 'schedule' && steps.schedule.outputs.run == 'true'
+        uses: actions/cache/save@v4
+        with:
+          path: internship_schedule_state.json
+          key: internship-schedule-v1-${{ github.run_id }}

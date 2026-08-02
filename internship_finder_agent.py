@@ -9,6 +9,7 @@ import os
 from datetime import datetime
 from pathlib import Path
 from typing import Any
+from zoneinfo import ZoneInfo
 
 from dotenv import load_dotenv
 
@@ -137,7 +138,9 @@ Return up to 10 distinct opportunities scoring at least 70/100. Return exactly:
 
 
 def build_digest(result: dict[str, Any]) -> tuple[str, str]:
-    stamp = datetime.now().astimezone().strftime("%Y-%m-%d %I:%M %p")
+    stamp = datetime.now(ZoneInfo("America/Los_Angeles")).strftime(
+        "%Y-%m-%d %I:%M %p"
+    )
     jobs = result.get("jobs", [])
     summary = result.get("summary", {})
     subject = f"Summer 2027 internship matches - {stamp}"

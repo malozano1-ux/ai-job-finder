@@ -6,6 +6,7 @@ from unittest.mock import MagicMock, patch
 
 import job_finder_agent as agent
 import uw_part_time_agent as uw_agent
+from schedule_gate import latest_due_slot
 from openai import RateLimitError
 from sync_applied_jobs import rows_to_jobs
 from sync_internship_tracker import tracker_rows
@@ -15,6 +16,20 @@ from sync_gmail_tracker import HEADERS, validate_plan
 
 
 class AgentTests(unittest.TestCase):
+    def test_schedule_gate_uses_latest_due_local_slot(self):
+        moment = __import__("datetime").datetime(
+            2026, 8, 1, 14, 20,
+            tzinfo=__import__("zoneinfo").ZoneInfo("America/Los_Angeles"),
+        )
+        self.assertEqual(latest_due_slot(moment, [8, 13, 18]), "2026-08-01-13")
+
+    def test_schedule_gate_catches_previous_evening_slot(self):
+        moment = __import__("datetime").datetime(
+            2026, 8, 1, 2, 20,
+            tzinfo=__import__("zoneinfo").ZoneInfo("America/Los_Angeles"),
+        )
+        self.assertEqual(latest_due_slot(moment, [9, 14, 19]), "2026-07-31-19")
+
     @patch.object(uw_agent, "create_response_with_rate_limit_retry")
     @patch.object(uw_agent, "openai_client")
     def test_uw_search_uses_rate_limit_retry_and_token_cap(

@@ -4,6 +4,11 @@ on:
   schedule:
     - cron: "23 * * * *"
   workflow_dispatch:
+    inputs:
+      student_backfill:
+        description: Reprocess recent email for Internship and UW trackers
+        type: boolean
+        default: false
 
 permissions:
   contents: read
@@ -58,14 +63,22 @@ jobs:
           printf '%s' "$GOOGLE_SERVICE_ACCOUNT_JSON" > google-service-account.json
 
       - name: Update all application trackers from Gmail
+        shell: bash
         run: |
+          tabs=("Job Tracker" "Internship Tracker" "UW Part-Time")
+          extra=()
+          if [[ "${{ inputs.student_backfill }}" == "true" ]]; then
+            tabs=("Internship Tracker" "UW Part-Time")
+            extra=(--ignore-state)
+          fi
           python sync_gmail_tracker.py \
-            --gmail-token gmail_token.json \
-            --sheets-credentials google-service-account.json \
-            --spreadsheet-id "$JOB_TRACKER_SPREADSHEET_ID" \
-            --tabs "Job Tracker" "Internship Tracker" "UW Part-Time" \
-            --days 90 \
-            --state-file gmail_sync_state.json
+              --gmail-token gmail_token.json \
+              --sheets-credentials google-service-account.json \
+              --spreadsheet-id "$JOB_TRACKER_SPREADSHEET_ID" \
+              --tabs "${tabs[@]}" \
+              --days 90 \
+              --state-file gmail_sync_state.json \
+              "${extra[@]}"
 
       - name: Remove temporary credentials
         if: always()
