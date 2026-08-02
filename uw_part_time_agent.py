@@ -74,7 +74,9 @@ SEARCH RULES:
 - Exclude everything already in this tracker snapshot:
 {json.dumps(existing, ensure_ascii=False)}
 
-Return up to 10 distinct roles scoring at least 65/100. Return exactly:
+Return up to 6 distinct roles scoring at least 65/100. Keep the search focused:
+inspect the most promising official listings and stop once six verified matches
+are found. Return exactly:
 {{
   "summary": {{"reviewed": 0, "coverage": "one sentence"}},
   "jobs": [{{
@@ -101,8 +103,8 @@ Return up to 10 distinct roles scoring at least 65/100. Return exactly:
         model=model,
         input=prompt,
         tools=[{"type": "web_search"}],
-        reasoning={"effort": "medium"},
-        max_output_tokens=12_000,
+        reasoning={"effort": "low"},
+        max_output_tokens=6_000,
     )
     result = extract_json(response.output_text)
     jobs = result.get("jobs", [])
@@ -129,7 +131,7 @@ Return up to 10 distinct roles scoring at least 65/100. Return exactly:
             seen_urls.add(url)
             seen_identities.add(identity)
     result["jobs"] = sorted(
-        selected[:10],
+        selected[:6],
         key=lambda row: int(row.get("fit_score", 0)),
         reverse=True,
     )
