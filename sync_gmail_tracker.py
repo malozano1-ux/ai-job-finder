@@ -20,6 +20,8 @@ from google.oauth2.credentials import Credentials
 from googleapiclient.discovery import build
 from openai import OpenAI
 
+from job_finder_agent import create_response_with_rate_limit_retry
+
 
 GMAIL_SCOPE = ["https://www.googleapis.com/auth/gmail.readonly"]
 SHEETS_SCOPE = ["https://www.googleapis.com/auth/spreadsheets"]
@@ -88,6 +90,8 @@ def recent_candidate_emails(gmail: Any, days: int) -> list[dict[str, str]]:
         '"technical assessment"', '"coding assessment"', '"take-home"',
         '"final round"', '"final interview"', '"move forward"',
         '"not moving forward"', '"another candidate"', '"position has been filled"',
+        '"we\'ve got it"', '"candidate portal"', '"application to"',
+        '"application for"', '"currently under review"',
         '"presentar tu solicitud"', '"hemos recibido tu solicitud"',
     ]
     query = f"newer_than:{days}d -in:spam -in:trash (" + " OR ".join(phrases) + ")"
@@ -212,9 +216,12 @@ Return exactly:
   "skipped": [{{"message_id": "", "reason": ""}}]
 }}
 """
-    client = OpenAI(api_key=os.environ["OPENAI_API_KEY"])
-    response = client.responses.create(
-        model=os.getenv("OPENAI_MODEL") or "gpt-5.6-luna", input=prompt
+    client = OpenAI(api_key=os.environ["OPENAI_API_KEY"], max_retries=0)
+    response = create_response_with_rate_limit_retry(
+        client,
+        model=os.getenv("OPENAI_MODEL") or "gpt-5.6-luna",
+        input=prompt,
+        max_output_tokens=6_000,
     )
     return _extract_json(response.output_text)
 
@@ -330,6 +337,7 @@ def main() -> None:
     parser.add_argument("--days", type=int, default=30)
     parser.add_argument("--state-file", type=Path, default=Path("gmail_sync_state.json"))
     parser.add_argument("--preview", action="store_true")
+    parser.add_argument("--ignore-state", action="store_true")
     parser.add_argument("--output", type=Path)
     args = parser.parse_args()
     gmail = build(
@@ -342,7 +350,7 @@ def main() -> None:
         cache_discovery=False,
     )
     state: dict[str, Any] = {"processed_message_ids": []}
-    if args.state_file.exists():
+    if args.state_file.exists() and not args.ignore_state:
         state = json.loads(args.state_file.read_text(encoding="utf-8"))
     processed = set(state.get("processed_message_ids", []))
     all_emails = recent_candidate_emails(gmail, args.days)
@@ -369,7 +377,7 @@ def main() -> None:
     rendered = json.dumps(result, indent=2, ensure_ascii=False)
     if args.output:
         args.output.write_text(rendered, encoding="utf-8")
-    if not args.preview:
+    if not args.preview and not args.ignore_state:
         retained = list(dict.fromkeys(
             [row["message_id"] for row in all_emails] + list(processed)
         ))[:2000]
